@@ -1,0 +1,387 @@
+Meta Ads Analytics SaaS – Product & Implementation Spec (Flask + SQLite Backend)
+
+Reference repo for inspiration only: https://github.com/pipeboard-co/meta-ads-mcp
+Goal: Build a SaaS product that connects to users’ Facebook / Meta Ads accounts, runs analytics on their ads and campaigns, and provides an AI-powered chat assistant for explanations and recommendations.
+
+We will not build or offer a competing hosted MCP server. We only use the meta-ads-mcp repo as technical inspiration (endpoints, workflows, field selections, and general structure).
+
+⸻
+
+1. Licensing & Intent Statement (for AI & developers)
+	1.	We are building our own SaaS product, not an MCP marketplace or generic MCP server.
+	2.	The pipeboard-co/meta-ads-mcp repository:
+	•	Is used as inspiration for:
+	•	Which Meta Marketing API endpoints to call.
+	•	How to structure insights queries (time ranges, breakdowns, filters).
+	•	What operations (list campaigns, get insights, etc.) are useful.
+	•	Must not be re-hosted as a competing hosted MCP service.
+	•	We avoid copying large chunks of code verbatim.
+	3.	Our SaaS is positioned as:
+	•	A Meta/Facebook Ads analytics & AI explanation tool.
+	•	Providing dashboards + chat-based analysis for advertisers.
+	•	Not a generic MCP server for third-party MCP clients.
+
+When generating or refactoring code, always:
+	•	Implement our own Node/TypeScript Meta API client layer, taking high-level ideas from meta-ads-mcp but not reproducing it line-by-line.
+	•	Keep our backend focused on our product use-cases (dashboards + chat analytics), not on exposing a general MCP interface.
+
+⸻
+
+2. Tech Stack & Deployment
+
+2.1 Frontend
+	•	Framework: Next.js (React, App Router preferred)
+	•	Language: TypeScript
+	•	Styling: Tailwind CSS
+	•	UI Components:
+	•	Tailwind utility classes
+	•	Optional: Headless UI / Radix UI for accessible primitives
+	•	Deployment: Vercel (Next.js native hosting)
+
+2.2 Backend
+	•	Framework: Flask (Python)
+	•	Language: Python 3
+	•	API Layer:
+	•	REST-style endpoints using Flask blueprints
+	•	Separate service layer modules for Meta API, analytics, and chat orchestration
+	•	Meta Integration:
+	•	Direct calls to the Meta Marketing API using requests or the official Facebook Business SDK for Python
+	•	OAuth handled via Flask routes and a Meta Developer App
+
+2.3 Database
+	•	Runtime: Node.js (via Next.js Route Handlers / API routes)
+	•	Language: TypeScript
+	•	API Layer:
+	•	Next.js API routes (app router app/api/.../route.ts)
+	•	REST-style endpoints for auth, Meta connections, analytics, chat
+	•	Meta Integration:
+	•	Direct calls to Meta Marketing API via Node SDK or custom HTTPS client
+	•	OAuth handled via Next.js API routes and Meta Developer App
+
+2.3 Database
+	•	Database: Vercel Postgres
+	•	ORM / DB Toolkit:
+	•	Prefer Prisma ORM with PostgreSQL provider
+	•	Use Cases:
+	•	Persist users, sessions, connected Meta accounts, access tokens
+	•	Store chat conversations & messages
+	•	Optional: Cache aggregated metrics (daily stats per account/campaign)
+
+2.4 LLM & AI
+	•	LLM Provider: Pluggable (OpenAI, Anthropic, etc.) via server-side calls in Node
+	•	Integration:
+	•	Server-side only (API routes)
+	•	Abstraction function, e.g. askLLM({ systemPrompt, userPrompt, data })
+
+2.5 Hosting / DevOps
+	•	Frontend Hosting: Vercel (for the Next.js app)
+	•	Backend Hosting: Any Python-friendly platform (e.g., Render, Railway, Fly.io, or a simple VPS)
+	•	Flask app served via gunicorn/uvicorn + reverse proxy (e.g., Nginx) depending on platform
+	•	Database: SQLite file hosted with the Flask backend (with a future option to migrate to Postgres if needed)
+	•	Environment Variables:
+	•	Managed via each platform’s secrets/ENV configuration (Meta app credentials, DB path, LLM keys)
+
+⸻
+
+3. Product Overview
+
+3.1 One-Line Description
+
+SaaS analytics tool that connects to your Facebook / Meta Ads account and uses AI to explain your performance, highlight what’s working, and show where you’re wasting ad spend.
+
+3.2 Target Users
+	•	Small business owners running Facebook / Instagram ads
+	•	Performance marketers in small agencies
+	•	Solo marketers or founders who find Ads Manager overwhelming
+
+3.3 Core Use Cases
+	1.	Connect Meta Ads account
+	•	Securely link one or more ad accounts via official Meta OAuth.
+	2.	View dashboards
+	•	Account-level overview: spend, conversions, ROAS, trends.
+	•	Campaign/Adset/Ad tables with key metrics.
+	3.	Ask questions in a chat
+	•	“Which campaigns should I pause?”
+	•	“Why did my CPA go up last week?”
+	•	“What should I test next?”
+	4.	Get AI-generated analysis
+	•	Plain English explanations
+	•	Short list of recommendations (e.g. “Pause these 3 campaigns”, “Increase budget on these”, “Test new creatives for X audience”).
+
+⸻
+
+4. High-Level Architecture
+
+4.1 Frontend (Next.js + React + Tailwind)
+
+Main pages/components:
+	1.	Marketing / Landing Page
+	•	Public route: /
+	•	Explains product, features, pricing, and CTAs.
+	2.	Auth Pages
+	•	/login, /signup, /reset-password (or unified auth page)
+	•	Forms styled with Tailwind
+	3.	App Shell (Authenticated)
+	•	Layout with:
+	•	Sidebar navigation (Dashboard, Campaigns, Chat, Settings)
+	•	Top bar with account selector and user menu
+	4.	Dashboard Page
+	•	Overview KPIs for the selected Meta ad account
+	•	Cards for: total spend, conversions, CPA, ROAS, CTR
+	•	Chart area (e.g., line chart of spend/conversions over time)
+	5.	Campaigns / Adsets / Ads Pages
+	•	Tables using simple Tailwind tables
+	•	Filtering by date range, status, objective
+	6.	Chat Page / Chat Panel
+	•	Chat UI with message bubbles
+	•	Input bar with send button
+	•	Optionally pinned in a right sidebar on dashboard pages
+	7.	Settings Page
+	•	Manage connected Meta ad accounts
+	•	Reconnect/revoke access
+
+4.2 Backend (Flask + Python)
+
+Backend will be a separate Flask app that exposes REST endpoints consumed by the Next.js frontend.
+
+Key route groups (names illustrative):
+	1.	Auth (/api/auth/*)
+	•	POST /api/auth/signup
+	•	POST /api/auth/login
+	•	POST /api/auth/logout
+	•	GET /api/auth/me (get current user)
+	2.	Meta Connection (/api/meta/*)
+	•	GET /api/meta/connect – returns Meta OAuth URL (frontend redirects user here)
+	•	GET /api/meta/callback – handles Meta OAuth redirect, exchanges code for tokens
+	•	GET /api/meta/accounts – list connected ad accounts for the authenticated user
+	3.	Analytics / Insights (/api/analytics/*)
+	•	GET /api/analytics/overview – account-level KPIs (query params: date range & account id)
+	•	GET /api/analytics/campaigns – campaigns list with metrics
+	•	GET /api/analytics/campaign/<id> – single campaign detail (adsets + ads)
+	4.	Chat / AI (/api/chat/*)
+	•	POST /api/chat/send – user sends a message, backend:
+	•	Reads message + context
+	•	Fetches relevant Meta insights via internal services
+	•	Calls LLM
+	•	Saves conversation & response
+	5.	Internal Services / Modules (non-routes)
+In a services or app/services directory, define Python modules:
+	•	meta_client.py
+	•	Wrapper around Meta Marketing API endpoints
+	•	Functions like:
+	•	list_ad_accounts(user_id)
+	•	get_account_overview(user_id, account_id, date_range)
+	•	get_campaigns(user_id, account_id, date_range)
+	•	get_campaign_insights(user_id, account_id, campaign_id, date_range)
+	•	Inspired by tool patterns from meta-ads-mcp but implemented in Python.
+	•	analytics.py
+	•	Business logic for computing aggregated KPIs
+	•	E.g. summarising insights data into OverviewStats, CampaignStats objects.
+	•	chat_orchestrator.py
+	•	Determines which analytics calls to make from a user question
+	•	Maps question → service calls → LLM prompt
+	•	llm_client.py
+	•	Thin wrapper to call the configured LLM provider from Python
+
+4.3 Database Models (Conceptual)
+
+Using SQLAlchemy-style models for clarity:
+(Conceptual)
+
+Using Prisma-style notation for clarity:
+	•	User
+	•	id (uuid)
+	•	email (unique)
+	•	passwordHash
+	•	createdAt
+	•	updatedAt
+	•	MetaConnection
+	•	id (uuid)
+	•	userId (fk -> User)
+	•	metaUserId
+	•	accessToken (encrypted/hashed storage strategy)
+	•	refreshToken / long-lived token (if used)
+	•	tokenExpiresAt
+	•	createdAt
+	•	updatedAt
+	•	MetaAdAccount
+	•	id (uuid)
+	•	userId (fk -> User)
+	•	metaConnectionId (fk -> MetaConnection)
+	•	accountId (Meta ad account id)
+	•	name
+	•	currency
+	•	status
+	•	createdAt
+	•	updatedAt
+	•	ChatConversation
+	•	id (uuid)
+	•	userId (fk -> User)
+	•	metaAdAccountId (optional fk -> MetaAdAccount)
+	•	title (auto-derived from first question)
+	•	createdAt
+	•	updatedAt
+	•	ChatMessage
+	•	id (uuid)
+	•	conversationId (fk -> ChatConversation)
+	•	role (“user” | “assistant” | “system”)
+	•	content (text/json)
+	•	createdAt
+	•	Optional: Aggregated stats tables for caching daily metrics per account/campaign if needed.
+
+⸻
+
+5. Functional Requirements
+
+5.1 Authentication & Onboarding
+	•	Users can sign up with email + password.
+	•	Login and logout flows (JWT or cookie-based sessions).
+	•	Post-login, if no Meta ad account is connected, show a “Connect your Facebook Ads” prompt.
+
+5.2 Meta Account Connection
+	•	Use official Meta OAuth flow.
+	•	Steps:
+	1.	User clicks “Connect Facebook Ads” on the UI.
+	2.	Frontend calls /api/meta/connect to get the Meta login URL.
+	3.	User is redirected to Meta, grants permissions.
+	4.	Meta redirects back to /api/meta/callback with a code.
+	5.	Backend exchanges code for access token, retrieves user’s ad accounts, stores tokens + accounts.
+	•	Store which ad accounts are linked to the user.
+
+5.3 Analytics (Dashboards)
+	•	Supported time ranges:
+	•	Last 7 days
+	•	Last 30 days
+	•	This month
+	•	Custom (start date, end date)
+	•	Metrics to show at minimum:
+	•	Spend
+	•	Impressions
+	•	Clicks
+	•	CTR
+	•	Conversions (where available)
+	•	Cost per result / CPA
+	•	ROAS (if revenue data is available)
+	•	Views:
+	1.	Overview
+	•	Aggregate metrics across the selected account.
+	•	Simple trend chart (spend & conversions over time).
+	2.	Campaigns List
+	•	Table with one row per campaign.
+	•	Columns: name, status, spend, conversions, CPA, ROAS, CTR.
+	3.	Campaign Detail
+	•	Drill-down into selected campaign.
+	•	Show ad sets & ads with metrics.
+
+5.4 Chat-Based Analytics
+	•	A chat panel accessible within the main app.
+	•	User can type free-form questions such as:
+	•	“Summarize last 7 days performance.”
+	•	“Which campaigns are wasting money?”
+	•	“What changed in the last 30 days vs previous 30 days?”
+	•	Backend behaviour per message:
+	1.	Receive message and conversation id.
+	2.	Look up user and selected Meta ad account.
+	3.	Decide which analytics to fetch (for MVP, keep rules simple: always fetch last 7 or 30 days overview + campaigns).
+	4.	Call analytics services → Meta API → get insights data.
+	5.	Construct LLM prompt:
+	•	System prompt: “You are a Meta Ads performance analyst. Explain things clearly and simply.”
+	•	User message.
+	•	Embedded JSON data with key metrics.
+	6.	Call LLM and get answer text.
+	7.	Store messages in ChatMessage table.
+	8.	Return response to frontend for display.
+	•	Important: The LLM is not calling Meta directly; it only sees data the backend passes in.
+
+5.5 Non-Goals (MVP)
+	•	No generic MCP server exposed to external tools.
+	•	No multi-platform ad support (Google Ads, TikTok, etc.) in v1.
+	•	No automated bidding/budget changes (only recommendations, not direct edits).
+
+⸻
+
+6. Landing Page Specification (Content & Structure)
+
+This landing page will be built as the Next.js home route / using React + Tailwind.
+
+6.1 Hero Section
+	•	Headline:
+	•	“Understand Your Facebook Ads in Plain English”
+	•	Subheadline:
+	•	“Connect your Meta Ads account and get clear, AI-powered insights on what’s working, what’s wasting money, and what to do next.”
+	•	Primary CTA Button:
+	•	“Connect Your Facebook Ads Account”
+	•	Secondary CTA:
+	•	“Watch Demo” or “See How It Works”
+	•	Visual Idea:
+	•	A mock dashboard screenshot plus a chat bubble that says something like:
+	•	“Your CPA increased 23% last week because mobile placements stopped performing. Consider testing new creatives for Instagram Feed.”
+
+6.2 How It Works (3 Steps)
+
+Present as 3 horizontal or vertical cards.
+	1.	Step 1 – Connect
+	•	Text: “Securely connect your Facebook / Meta Ads account in a few clicks using official Meta login.”
+	2.	Step 2 – Ask
+	•	Text: “Ask questions like ‘Which campaigns should I pause?’ or ‘Why did my ROAS drop last week?’”
+	3.	Step 3 – Act
+	•	Text: “Get simple explanations, key numbers, and clear recommendations you can implement right away.”
+
+6.3 Benefits Section
+
+Three feature cards or icons:
+	1.	Know What’s Working
+	•	“See your top campaigns, ad sets, and ads by ROAS, CPA, CTR and more—without digging through endless reports.”
+	2.	Spot Wasted Spend
+	•	“Instantly identify under-performing campaigns and placements that are burning budget.”
+	3.	AI-Powered Answers
+	•	“Don’t guess. Ask the built-in AI assistant and get explanations you actually understand.”
+
+6.4 Features List
+
+Use a bullet/grid layout:
+	•	Connect multiple Meta ad accounts
+	•	Overview dashboard with spend, conversions, ROAS
+	•	Campaign / adset / ad breakdowns
+	•	AI chat for performance questions
+	•	Simple recommendations for pausing, scaling, and testing
+	•	Secure Meta OAuth login; revoke access anytime
+
+6.5 Social Proof (Placeholder)
+	•	Space for 2–3 testimonials (can use placeholders initially):
+
+“I finally understand where my ad money goes. The AI chat explains it like I’m five.”
+— Name, Small Business Owner
+
+6.6 Pricing Teaser
+	•	Simple pricing block:
+	•	Starter – “Perfect for small businesses running up to X campaigns.”
+	•	Show either a price or “Early access pricing – limited slots”.
+	•	CTA button: “Join Early Access”
+
+6.7 Final CTA Strip
+	•	Heading:
+	•	“Ready to stop guessing your Facebook ad performance?”
+	•	Body Text:
+	•	“Connect your Meta Ads account and get your first AI-generated performance breakdown in minutes.”
+	•	Button:
+	•	“Get Started – Connect Ads Account”
+
+⸻
+
+7. Instructions for AI When Generating Code
+	1.	Use this spec as the source of truth for product behavior and tech stack.
+	2.	Frontend: Implement pages and components in Next.js (React + Tailwind) consistent with the sections above.
+	3.	Backend: Implement a separate Flask (Python) application exposing REST endpoints that the Next.js frontend can call.
+	4.	Database: Use SQLite via SQLAlchemy (or Flask-SQLAlchemy) and model the tables described.
+	5.	Meta API: Implement a custom Python client based on official Meta Marketing API docs. Use the meta-ads-mcp repo only as a conceptual guide for endpoints and workflows.
+	6.	LLM Integration: Create a small Python abstraction for calling the chosen LLM provider; keep keys and config in environment variables.
+	7.	Deployment:
+	•	Frontend: Deploy the Next.js app on Vercel.
+	•	Backend: Deploy the Flask app on a Python-friendly platform (Render, Railway, Fly.io, or VPS). Configure CORS and secure HTTPS.
+	•	Use environment variables for database path, Meta app credentials, and LLM keys.
+	8.	Security:
+	•	Never expose access tokens to the frontend.
+	•	Handle all Meta and LLM calls from the backend only.
+
+This document should be given to the AI so it can generate or refine the codebase for the SaaS product using a Flask + SQLite backend and a Next.js + Tailwind frontend, without conflicting with the MCP server scope of the reference repo.
