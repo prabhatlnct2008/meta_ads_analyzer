@@ -1,7 +1,7 @@
 import os
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.backends import default_backend
 import base64
 
@@ -10,7 +10,7 @@ def get_encryption_key():
     secret = os.getenv('ENCRYPTION_SECRET', 'default-secret-key-change-in-production')
     salt = b'meta_ads_analyzer_salt'  # In production, use a random salt stored separately
 
-    kdf = PBKDF2(
+    kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
         salt=salt,
